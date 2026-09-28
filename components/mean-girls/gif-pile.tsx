@@ -13,7 +13,10 @@ import {
 const CAT_WALL = 0x0001;
 const CAT_GIF = 0x0002;
 
-const PULL_STRENGTH = 2.4;
+const SPRING_STIFFNESS = 0.012;
+const SPRING_DAMPING = 0.24;
+const MAX_SPRING_ACCELERATION = 4;
+const PHYSICS_STEP_MS = 1000 / 60;
 const SMOOTHING_MS = 260;
 const RESTING_SCALE = 0.65;
 const MAGNETIZED_SCALE = 1.15;
@@ -112,7 +115,11 @@ export function GifPile({ targetsRef, magnetRef }: GifPileProps) {
     updateMagnetBounds();
 
     const dropOrder = GIFS.map((_, i) => i).sort(() => Math.random() - 0.5);
-    const magnetPoints = GIFS.map(() => 0.18 + Math.random() * 0.64);
+    const magnetPoints = GIFS.map((gif) => {
+      const siblings = GIFS.filter((other) => other.id === gif.id);
+      const index = siblings.findIndex((other) => other.key === gif.key);
+      return 0.18 + (index / Math.max(1, siblings.length - 1)) * 0.64;
+    });
     const bodies = GIFS.map((_, i) => {
       const slot = dropOrder.indexOf(i);
       const fallSpace = Math.max(0, height - magnetBounds.bottom - size);
@@ -221,10 +228,13 @@ export function GifPile({ targetsRef, magnetRef }: GifPileProps) {
         }
         if (p > 0.02) {
           const halfSize = (size * visualScale) / 2;
+          const rotatedHalfHeight =
+            halfSize *
+            (Math.abs(Math.sin(body.angle)) + Math.abs(Math.cos(body.angle)));
           const targetX =
             magnetBounds.left +
             (magnetBounds.right - magnetBounds.left) * magnetPoints[i];
-          const highestY = magnetBounds.bottom + MAGNET_GAP + halfSize;
+          const highestY = magnetBounds.bottom + MAGNET_GAP + rotatedHalfHeight;
           const dropRange = Math.max(
             0,
             Math.min(
@@ -236,12 +246,22 @@ export function GifPile({ targetsRef, magnetRef }: GifPileProps) {
           const targetY = highestY + dropRange * (1 - p);
           const dx = targetX - body.position.x;
           const dy = targetY - body.position.y;
-          const distance = Math.hypot(dx, dy) || 1;
-          const pull = body.mass * gravity * PULL_STRENGTH * p;
-          const antiGravity = body.mass * gravity * p;
+          // Matter velocities are pixels per physics step. A damped spring
+          // loses force as it nears the target instead of overshooting it.
+          const accelerationX =
+            (dx * SPRING_STIFFNESS - body.velocity.x * SPRING_DAMPING) * p;
+          const accelerationY =
+            (dy * SPRING_STIFFNESS - body.velocity.y * SPRING_DAMPING) * p;
+          const acceleration = Math.hypot(accelerationX, accelerationY);
+          const limit =
+            acceleration > MAX_SPRING_ACCELERATION
+              ? MAX_SPRING_ACCELERATION / acceleration
+              : 1;
           Body.applyForce(body, body.position, {
-            x: (dx / distance) * pull,
-            y: (dy / distance) * pull - antiGravity,
+            x: (body.mass * accelerationX * limit) / PHYSICS_STEP_MS ** 2,
+            y:
+              (body.mass * accelerationY * limit) / PHYSICS_STEP_MS ** 2 -
+              body.mass * gravity * p,
           });
           if (p > 0.05) {
             const uprightAngle = Math.atan2(
