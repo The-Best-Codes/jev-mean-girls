@@ -12,16 +12,19 @@ import {
 
 const CAT_WALL = 0x0001;
 const CAT_GIF = 0x0002;
+const CAT_MAGNETIZED = 0x0004;
 
-const SPRING_STIFFNESS = 0.012;
-const SPRING_DAMPING = 0.24;
-const MAX_SPRING_ACCELERATION = 4;
+const SPRING_STIFFNESS = 0.028;
+const SPRING_DAMPING = 0.34;
+const MAX_SPRING_ACCELERATION = 7;
 const PHYSICS_STEP_MS = 1000 / 60;
 const SMOOTHING_MS = 260;
 const RESTING_SCALE = 0.65;
 const MAGNETIZED_SCALE = 1.15;
-const COLLISION_SCALE = 0.78;
+const COLLISION_SCALE = 0.74;
 const MAGNET_GAP = 40;
+const MAGNET_THRESHOLD = 0.01;
+const MAGNET_RAMP = 0.12;
 
 const GIFS = CHARACTER_IDS.flatMap((id) =>
   CHARACTERS[id].gifs.map((src, index) => ({ id, src, key: `${id}-${index}` })),
@@ -64,7 +67,7 @@ export function GifPile({ targetsRef, magnetRef }: GifPileProps) {
     const wallThickness = 400;
     const wallOptions = {
       isStatic: true,
-      collisionFilter: { category: CAT_WALL, mask: CAT_GIF },
+      collisionFilter: { category: CAT_WALL, mask: CAT_GIF | CAT_MAGNETIZED },
     };
     let walls: Matter.Body[] = [];
     const buildWalls = () => {
@@ -115,11 +118,23 @@ export function GifPile({ targetsRef, magnetRef }: GifPileProps) {
     updateMagnetBounds();
 
     const dropOrder = GIFS.map((_, i) => i).sort(() => Math.random() - 0.5);
-    const magnetPoints = GIFS.map((gif) => {
+    const magnetSlots = GIFS.map((gif) => {
       const siblings = GIFS.filter((other) => other.id === gif.id);
-      const index = siblings.findIndex((other) => other.key === gif.key);
-      return 0.18 + (index / Math.max(1, siblings.length - 1)) * 0.64;
+      return {
+        index: siblings.findIndex((other) => other.key === gif.key),
+        count: siblings.length,
+      };
     });
+    // Give each GIF a stable personality instead of assigning random targets
+    // every frame, which would make the springs jitter.
+    const magnetStyles = GIFS.map(() => ({
+      offsetX: Math.random() - 0.5,
+      offsetY: Math.random() - 0.5,
+      tilt: (Math.random() - 0.5) * 0.6,
+      scale: 0.88 + Math.random() * 0.24,
+      phase: Math.random() * Math.PI * 2,
+      speed: 0.7 + Math.random() * 0.6,
+    }));
     const bodies = GIFS.map((_, i) => {
       const slot = dropOrder.indexOf(i);
       const fallSpace = Math.max(0, height - magnetBounds.bottom - size);
@@ -148,8 +163,11 @@ export function GifPile({ targetsRef, magnetRef }: GifPileProps) {
       return { x: clientX - origin.left, y: clientY - origin.top };
     };
 
-    let drag: { constraint: Matter.Constraint; pointerId: number } | null =
-      null;
+    let drag: {
+      constraint: Matter.Constraint;
+      pointerId: number;
+      body: Matter.Body;
+    } | null = null;
     const endDrag = () => {
       if (!drag) return;
       Composite.remove(world, drag.constraint);
@@ -168,7 +186,7 @@ export function GifPile({ targetsRef, magnetRef }: GifPileProps) {
         length: 0,
       });
       Composite.add(world, constraint);
-      drag = { constraint, pointerId };
+      drag = { constraint, pointerId, body };
     };
     const onPointerMove = (event: PointerEvent) => {
       if (drag && event.pointerId === drag.pointerId) {
@@ -204,20 +222,40 @@ export function GifPile({ targetsRef, magnetRef }: GifPileProps) {
     const gravity = engine.gravity.scale * engine.gravity.y;
     let frame = 0;
     let last = performance.now();
+    let elapsed = 0;
 
     const tick = (now: number) => {
-      const dt = Math.min(now - last, 1000 / 30);
+      const dt = Math.min(now - last, 50);
       last = now;
+      elapsed = Math.min(elapsed + dt, PHYSICS_STEP_MS * 3);
 
       const targets = targetsRef.current ?? EMPTY_PROBABILITIES;
       const blend = 1 - Math.exp(-dt / SMOOTHING_MS);
       for (const id of CHARACTER_IDS) {
         current[id] += (targets[id] - current[id]) * blend;
       }
+      const winner = CHARACTER_IDS.reduce((best, id) =>
+        targets[id] > targets[best] ? id : best,
+      );
+      const winnerPull =
+        targets[winner] > 0
+          ? Math.min(
+              1,
+              Math.max(0, (current[winner] - MAGNET_THRESHOLD) / MAGNET_RAMP),
+            )
+          : 0;
+      const magnetWidth = magnetBounds.right - magnetBounds.left;
+      const magnetSize = size * (MAGNETIZED_SCALE / RESTING_SCALE);
 
       bodies.forEach((body, i) => {
-        const p = current[GIFS[i].id];
-        const visualScale = 1 + (MAGNETIZED_SCALE / RESTING_SCALE - 1) * p;
+        const pull = GIFS[i].id === winner ? winnerPull : 0;
+        const style = magnetStyles[i];
+        const targetScale =
+          (1 + (MAGNETIZED_SCALE / RESTING_SCALE - 1) * pull) *
+          (1 + (style.scale - 1) * pull);
+        const visualScale =
+          bodyScales[i] +
+          (targetScale - bodyScales[i]) * (1 - Math.exp(-dt / 120));
         if (Math.abs(visualScale - bodyScales[i]) > 0.001) {
           Body.scale(
             body,
@@ -226,32 +264,70 @@ export function GifPile({ targetsRef, magnetRef }: GifPileProps) {
           );
           bodyScales[i] = visualScale;
         }
-        if (p > 0.02) {
+        const freeMoving =
+          pull > 0.1 || drag?.body === body || bodyScales[i] > 1.08;
+        body.collisionFilter.category = freeMoving ? CAT_MAGNETIZED : CAT_GIF;
+        body.collisionFilter.mask = freeMoving ? CAT_WALL : CAT_WALL | CAT_GIF;
+        if (pull > 0 && drag?.body !== body) {
           const halfSize = (size * visualScale) / 2;
           const rotatedHalfHeight =
             halfSize *
             (Math.abs(Math.sin(body.angle)) + Math.abs(Math.cos(body.angle)));
-          const targetX =
-            magnetBounds.left +
-            (magnetBounds.right - magnetBounds.left) * magnetPoints[i];
-          const highestY = magnetBounds.bottom + MAGNET_GAP + rotatedHalfHeight;
-          const dropRange = Math.max(
-            0,
-            Math.min(
-              180,
-              (height - magnetBounds.bottom) * 0.5,
-              height - halfSize - highestY,
+          const { index, count } = magnetSlots[i];
+          const maxColumns = Math.max(
+            2,
+            Math.floor(magnetWidth / (magnetSize * 0.9)),
+          );
+          const columns =
+            maxColumns >= count
+              ? count
+              : Math.min(maxColumns, Math.ceil(count / 2));
+          const rows = Math.ceil(count / columns);
+          const row = Math.floor(index / columns);
+          const rowCount = Math.min(columns, count - row * columns);
+          const column = index % columns;
+          const sway = Math.sin((now / 1000) * style.speed + style.phase);
+          const targetX = Math.min(
+            width - halfSize,
+            Math.max(
+              halfSize,
+              magnetBounds.left +
+                magnetWidth * ((column + 0.5) / rowCount) +
+                style.offsetX * (magnetWidth / rowCount) * 0.55 * pull +
+                sway * magnetSize * 0.045 * pull,
             ),
           );
-          const targetY = highestY + dropRange * (1 - p);
+          const highestY = magnetBounds.bottom + MAGNET_GAP + rotatedHalfHeight;
+          const rowSpacing = Math.min(
+            magnetSize * 0.82,
+            Math.max(0, (height - highestY - halfSize) / Math.max(1, rows)),
+          );
+          const dropRange = Math.max(
+            0,
+            Math.min(120, height - halfSize - highestY - row * rowSpacing),
+          );
+          const targetY = Math.min(
+            height - halfSize,
+            Math.max(
+              highestY,
+              highestY +
+                row * rowSpacing +
+                dropRange * (1 - pull) +
+                style.offsetY * magnetSize * 0.6 * pull +
+                Math.cos((now / 1000) * style.speed + style.phase) *
+                  magnetSize *
+                  0.055 *
+                  pull,
+            ),
+          );
           const dx = targetX - body.position.x;
           const dy = targetY - body.position.y;
           // Matter velocities are pixels per physics step. A damped spring
           // loses force as it nears the target instead of overshooting it.
           const accelerationX =
-            (dx * SPRING_STIFFNESS - body.velocity.x * SPRING_DAMPING) * p;
+            (dx * SPRING_STIFFNESS - body.velocity.x * SPRING_DAMPING) * pull;
           const accelerationY =
-            (dy * SPRING_STIFFNESS - body.velocity.y * SPRING_DAMPING) * p;
+            (dy * SPRING_STIFFNESS - body.velocity.y * SPRING_DAMPING) * pull;
           const acceleration = Math.hypot(accelerationX, accelerationY);
           const limit =
             acceleration > MAX_SPRING_ACCELERATION
@@ -261,27 +337,34 @@ export function GifPile({ targetsRef, magnetRef }: GifPileProps) {
             x: (body.mass * accelerationX * limit) / PHYSICS_STEP_MS ** 2,
             y:
               (body.mass * accelerationY * limit) / PHYSICS_STEP_MS ** 2 -
-              body.mass * gravity * p,
+              body.mass * gravity * pull,
           });
-          if (p > 0.05) {
-            const uprightAngle = Math.atan2(
-              Math.sin(body.angle),
-              Math.cos(body.angle),
+          if (pull > 0.1) {
+            const targetAngle =
+              style.tilt +
+              Math.sin((now / 1000) * style.speed + style.phase) * 0.045;
+            const angleError = Math.atan2(
+              Math.sin(body.angle - targetAngle),
+              Math.cos(body.angle - targetAngle),
             );
             Body.setAngularVelocity(
               body,
-              body.angularVelocity * (1 - 0.14 * p) - uprightAngle * 0.018 * p,
+              body.angularVelocity * (1 - 0.14 * pull) -
+                angleError * 0.018 * pull,
             );
           }
         }
-        body.frictionAir = 0.015 + 0.05 * p;
+        body.frictionAir = 0.015 + 0.05 * pull;
       });
 
-      Engine.update(engine, dt);
+      while (elapsed >= PHYSICS_STEP_MS) {
+        Engine.update(engine, PHYSICS_STEP_MS);
+        elapsed -= PHYSICS_STEP_MS;
+      }
 
       bodies.forEach((body, i) => {
-        const p = current[GIFS[i].id];
-        if (p > 0.02) {
+        const pull = GIFS[i].id === winner ? winnerPull : 0;
+        if (pull > 0) {
           const halfSize = (size * bodyScales[i]) / 2;
           const rotatedHalfHeight =
             halfSize *
@@ -297,8 +380,8 @@ export function GifPile({ targetsRef, magnetRef }: GifPileProps) {
         const el = itemRefs.current[i];
         if (!el) return;
         el.style.transform = `translate3d(${body.position.x - size / 2}px, ${body.position.y - size / 2}px, 0) rotate(${body.angle}rad) scale(${bodyScales[i]})`;
-        el.style.zIndex = String(1 + Math.round(p * 20));
-        el.style.boxShadow = `0 0 0 ${(p * 10).toFixed(1)}px var(--primary), 0 6px 0 var(--foreground)`;
+        el.style.zIndex = String(1 + Math.round(pull * 20));
+        el.style.boxShadow = `0 0 0 ${(pull * 10).toFixed(1)}px var(--primary), 0 6px 0 var(--foreground)`;
       });
 
       frame = requestAnimationFrame(tick);
