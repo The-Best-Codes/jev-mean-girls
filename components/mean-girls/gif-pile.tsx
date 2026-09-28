@@ -15,16 +15,14 @@ const CAT_GIF = 0x0002;
 const CAT_MAGNETIZED = 0x0004;
 
 const SPRING_STIFFNESS = 0.028;
-const SPRING_DAMPING = 0.34;
+const SPRING_DAMPING = 0.48;
 const MAX_SPRING_ACCELERATION = 7;
 const PHYSICS_STEP_MS = 1000 / 60;
-const SMOOTHING_MS = 260;
+const SMOOTHING_MS = 550;
 const RESTING_SCALE = 0.65;
 const MAGNETIZED_SCALE = 1.15;
 const COLLISION_SCALE = 0.74;
 const MAGNET_GAP = 40;
-const MAGNET_THRESHOLD = 0.01;
-const MAGNET_RAMP = 0.12;
 
 const GIFS = CHARACTER_IDS.flatMap((id) =>
   CHARACTERS[id].gifs.map((src, index) => ({ id, src, key: `${id}-${index}` })),
@@ -148,9 +146,10 @@ export function GifPile({ targetsRef, magnetRef }: GifPileProps) {
         collisionSize,
         {
           chamfer: { radius: collisionSize * 0.14 },
-          restitution: 0.25,
-          friction: 0.4,
-          frictionAir: 0.015,
+          restitution: 0.12,
+          friction: 0.75,
+          frictionStatic: 0.8,
+          frictionAir: 0.03,
           angle: (Math.random() - 0.5) * 0.8,
           collisionFilter: { category: CAT_GIF, mask: CAT_WALL | CAT_GIF },
         },
@@ -223,6 +222,8 @@ export function GifPile({ targetsRef, magnetRef }: GifPileProps) {
     let frame = 0;
     let last = performance.now();
     let elapsed = 0;
+    let activeWinner: CharacterId | null = null;
+    const magnetOrigins = bodies.map((body) => ({ ...body.position }));
 
     const tick = (now: number) => {
       const dt = Math.min(now - last, 50);
@@ -234,16 +235,21 @@ export function GifPile({ targetsRef, magnetRef }: GifPileProps) {
       for (const id of CHARACTER_IDS) {
         current[id] += (targets[id] - current[id]) * blend;
       }
-      const winner = CHARACTER_IDS.reduce((best, id) =>
+      const topId = CHARACTER_IDS.reduce((best, id) =>
         targets[id] > targets[best] ? id : best,
       );
-      const winnerPull =
-        targets[winner] > 0
-          ? Math.min(
-              1,
-              Math.max(0, (current[winner] - MAGNET_THRESHOLD) / MAGNET_RAMP),
-            )
-          : 0;
+      const winner = targets[topId] > 0 ? topId : null;
+      if (winner !== activeWinner) {
+        activeWinner = winner;
+        if (winner) {
+          bodies.forEach((body, i) => {
+            if (GIFS[i].id === winner) {
+              magnetOrigins[i] = { ...body.position };
+            }
+          });
+        }
+      }
+      const winnerPull = winner ? Math.min(1, Math.max(0, current[winner])) : 0;
       const magnetWidth = magnetBounds.right - magnetBounds.left;
       const magnetSize = size * (MAGNETIZED_SCALE / RESTING_SCALE);
 
@@ -287,14 +293,16 @@ export function GifPile({ targetsRef, magnetRef }: GifPileProps) {
           const rowCount = Math.min(columns, count - row * columns);
           const column = index % columns;
           const sway = Math.sin((now / 1000) * style.speed + style.phase);
+          const finalX =
+            magnetBounds.left +
+            magnetWidth * ((column + 0.5) / rowCount) +
+            style.offsetX * (magnetWidth / rowCount) * 0.55 +
+            sway * magnetSize * 0.045;
           const targetX = Math.min(
             width - halfSize,
             Math.max(
               halfSize,
-              magnetBounds.left +
-                magnetWidth * ((column + 0.5) / rowCount) +
-                style.offsetX * (magnetWidth / rowCount) * 0.55 * pull +
-                sway * magnetSize * 0.045 * pull,
+              magnetOrigins[i].x + (finalX - magnetOrigins[i].x) * pull,
             ),
           );
           const highestY = magnetBounds.bottom + MAGNET_GAP + rotatedHalfHeight;
@@ -302,18 +310,14 @@ export function GifPile({ targetsRef, magnetRef }: GifPileProps) {
             magnetSize * 0.82,
             Math.max(0, (height - highestY - halfSize) / Math.max(1, rows)),
           );
-          const dropRange = Math.max(
-            0,
-            Math.min(120, height - halfSize - highestY - row * rowSpacing),
-          );
+          const topY =
+            highestY + row * rowSpacing + style.offsetY * magnetSize * 0.6;
           const targetY = Math.min(
             height - halfSize,
             Math.max(
               highestY,
-              highestY +
-                row * rowSpacing +
-                dropRange * (1 - pull) +
-                style.offsetY * magnetSize * 0.6 * pull +
+              magnetOrigins[i].y +
+                (topY - magnetOrigins[i].y) * pull +
                 Math.cos((now / 1000) * style.speed + style.phase) *
                   magnetSize *
                   0.055 *
@@ -322,12 +326,15 @@ export function GifPile({ targetsRef, magnetRef }: GifPileProps) {
           );
           const dx = targetX - body.position.x;
           const dy = targetY - body.position.y;
+          const springStrength = Math.min(1, 0.35 + pull * 1.3);
           // Matter velocities are pixels per physics step. A damped spring
           // loses force as it nears the target instead of overshooting it.
           const accelerationX =
-            (dx * SPRING_STIFFNESS - body.velocity.x * SPRING_DAMPING) * pull;
+            (dx * SPRING_STIFFNESS - body.velocity.x * SPRING_DAMPING) *
+            springStrength;
           const accelerationY =
-            (dy * SPRING_STIFFNESS - body.velocity.y * SPRING_DAMPING) * pull;
+            (dy * SPRING_STIFFNESS - body.velocity.y * SPRING_DAMPING) *
+            springStrength;
           const acceleration = Math.hypot(accelerationX, accelerationY);
           const limit =
             acceleration > MAX_SPRING_ACCELERATION
@@ -337,7 +344,7 @@ export function GifPile({ targetsRef, magnetRef }: GifPileProps) {
             x: (body.mass * accelerationX * limit) / PHYSICS_STEP_MS ** 2,
             y:
               (body.mass * accelerationY * limit) / PHYSICS_STEP_MS ** 2 -
-              body.mass * gravity * pull,
+              body.mass * gravity * springStrength,
           });
           if (pull > 0.1) {
             const targetAngle =
@@ -354,7 +361,7 @@ export function GifPile({ targetsRef, magnetRef }: GifPileProps) {
             );
           }
         }
-        body.frictionAir = 0.015 + 0.05 * pull;
+        body.frictionAir = 0.03 + 0.075 * pull;
       });
 
       while (elapsed >= PHYSICS_STEP_MS) {
