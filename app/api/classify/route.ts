@@ -12,12 +12,12 @@ const MAX_LENGTH = 200;
 const criteria = Object.fromEntries(
   CHARACTER_IDS.map((id) => [
     id,
-    `${CHARACTERS[id].name}: ${CHARACTERS[id].description}`,
+    { name: CHARACTERS[id].name, lines: CHARACTERS[id].lines },
   ]),
-) as Record<CharacterId, string>;
+) as Record<CharacterId, { name: string; lines: string[] }>;
 
 const characterQuestion = choice(
-  "Which Mean Girls (2004 movie) character is most likely to have said or typed this? Judge by catchphrases, voice, attitude and personality.",
+  "Which Mean Girls (2004) character is most likely to have said this?",
   criteria,
 );
 
@@ -51,7 +51,7 @@ export async function POST(request: Request) {
 
   try {
     const { answers } = await getClient().systemOne({
-      state: { message: text },
+      state: text,
       questions: { character: characterQuestion },
     });
     const answer = answers.character;

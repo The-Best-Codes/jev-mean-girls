@@ -15,7 +15,7 @@ export type Probabilities = Record<CharacterId, number>;
 
 type Character = {
   name: string;
-  description: string;
+  lines: string[];
   gifs: string[];
 };
 
@@ -24,8 +24,22 @@ const giphy = (id: string) => `https://media.giphy.com/media/${id}/200w.gif`;
 export const CHARACTERS: Record<CharacterId, Character> = {
   regina: {
     name: "Regina George",
-    description:
-      "The queen bee. Condescending, manipulative, vain and in control. Backhanded compliments, fake niceness, bossing people around, mocking others. Lines like 'Get in loser, we're going shopping', 'Boo, you whore', 'You can't sit with us', 'So you agree, you think you're really pretty?', 'Stop trying to make fetch happen'.",
+    lines: [
+      "Get in, loser. We’re going shopping.",
+      "But you’re, like, really pretty. So you agree? You think you’re really pretty?",
+      "Gretchen, stop trying to make fetch happen! It’s not going to happen!",
+      "Is butter a carb?",
+      "Boo, you whore.",
+      "I gave him everything. I was half a virgin when I met him.",
+      "Why are you so obsessed with me?",
+      "I like, invented her, you know what I mean?",
+      "Whatever, I’m getting cheese fries.",
+      "These sweatpants are all that fits me right now.",
+      "You can walk home, bitches.",
+      "That’s the ugliest f***ing skirt I’ve ever seen.",
+      "This girl is the nastiest skank bitch I’ve ever met. DO NOT TRUST HER. She is a fugly slut!",
+      "Okay, I’m going to forgive you because I’m a very Zen person… and I’m on a lot of pain medication right now.",
+    ],
     gifs: [
       "9uxjfkIHTOnpm",
       "UqqCo0sTw5PreERNp9",
@@ -35,8 +49,19 @@ export const CHARACTERS: Record<CharacterId, Character> = {
   },
   gretchen: {
     name: "Gretchen Wieners",
-    description:
-      "Insecure, anxious follower desperate for approval, always trying to make slang happen, gossipy and bursting with secrets, rich-girl bragging. Lines like 'That is so fetch', 'My dad invented Toaster Strudel', 'My hair is so big because it's full of secrets', 'I can't help it that I'm popular', 'Irregardless'.",
+    lines: [
+      "That is so fetch!",
+      "Oh, it’s like slang from England.",
+      "You can’t sit with us!",
+      "I’m sorry that people are so jealous of me, but I can’t help it that I’m popular.",
+      "Irregardless, ex-boyfriends are off-limits to friends. That’s just, like, the rules of feminism.",
+      "I don’t think my father — the inventor of Toaster Strudel — would be too pleased to hear about this.",
+      "Oh my God, Karen, you can’t just ask people why they’re white.",
+      "We should totally just stab Caesar!",
+      "Why should Caesar get to stomp around like a giant while the rest of us try not to get smushed under his big feet?",
+      "You can only wear your hair in a ponytail once a week.",
+      "Make sure you check out her mom’s boob job. They’re hard as rocks.",
+    ],
     gifs: [
       "3otPoUjeyRisIDxPhK",
       "7wZDqH0oqlm92",
@@ -46,8 +71,19 @@ export const CHARACTERS: Record<CharacterId, Character> = {
   },
   karen: {
     name: "Karen Smith",
-    description:
-      "Sweet but hopelessly dim and literal, ditzy non-sequiturs, confident nonsense, weather or body 'predictions'. Lines like 'On Wednesdays we wear pink', 'I'm a mouse, duh', 'It's like I have ESPN or something', 'Why are you white?', 'Is butter a carb?', 'I can tell when it's raining'.",
+    lines: [
+      "On Wednesdays we wear pink.",
+      "So if you’re from Africa, why are you white?",
+      "I’m a mouse. Duh.",
+      "I’m kind of psychic. I have a fifth sense.",
+      "It’s like I have ESPN or something. My breasts can always tell when it’s going to rain. Well… they can tell when it’s raining.",
+      "You wanna do something fun? You wanna go to Taco Bell?",
+      "So that’s against the rules, and you can’t sit with us.",
+      "I can’t go out. I’m sick.",
+      "Gretchen, I’m sorry I laughed at you that time you got diarrhea at Barnes & Noble. And I’m sorry for telling everyone about it. And I’m sorry for repeating it now.",
+      "I can stick my whole fist in my mouth.",
+      "There’s a 30% chance that it’s already raining!",
+    ],
     gifs: [
       "xT9KVtQBk8cGFcZH4A",
       "3o7aTJvqx8D4ruHv3y",
@@ -56,22 +92,54 @@ export const CHARACTERS: Record<CharacterId, Character> = {
   },
   cady: {
     name: "Cady Heron",
-    description:
-      "The new girl, a math nerd raised in Africa, naive and earnest, compares school to the animal kingdom, awkward social confusion, sometimes word vomit. Lines like 'The limit does not exist', 'Grool', 'Jambo', 'I know it's supposed to be sweet', talking about math, calculus, mathletes or animals.",
+    lines: [
+      "On October 3rd, he asked me what day it was.",
+      "It’s October 3rd.",
+      "The limit does not exist!",
+      "It’s not my fault you’re, like, in love with me or something!",
+      "Grool. I meant to say great, but then I started to say cool.",
+      "Calling somebody else fat won’t make you any skinnier. Calling someone stupid doesn’t make you any smarter. And ruining Regina George’s life definitely didn’t make me any happier.",
+      "I have this theory that if you cut all her hair off, she’d look like a British man.",
+      "I like math. And food.",
+      "I have really bad breath in the morning.",
+      "Having lunch with The Plastics was like leaving the actual world and entering Girl World.",
+      "In Girl World, Halloween is the one night a year when a girl can dress like a total slut and no other girls can say anything about it.",
+    ],
     gifs: ["Jrk8r1Im507aEdvO9S", "qTO7lbGDn27i8", "3otPotFivKqtGpEspO"].map(
       giphy,
     ),
   },
   janis: {
     name: "Janis Ian",
-    description:
-      "Sarcastic, artsy, goth-leaning outsider who hates the Plastics and plots revenge. Dry cynical humor, blunt insults about popular girls, schemes and art. Lines like 'Regina George is a life ruiner', 'She's fabulous but she's evil', 'Let's take her down', 'You smell like a baby prostitute'.",
+    lines: [
+      "You smell like a baby prostitute.",
+      "See? That’s the thing with you Plastics. You think everybody is in love with you when actually everybody hates you.",
+      "She’s a life ruiner. She ruins people’s lives.",
+      "Evil takes a human form in Regina George.",
+      "We gotta crack Gretchen Wieners. We crack Gretchen, and then we crack the lock on Regina’s whole dirty history.",
+      "Your mom’s chest hair!",
+      "Oh, I love seeing teachers outside of school. It’s like seeing a dog walk on its hind legs.",
+      "There are two kinds of evil people in this world. Those who do evil stuff and those who see evil stuff being done and don’t try to stop it.",
+      "You’re Plastic. Cold, shiny, hard Plastic!",
+      "Beware of the Plastics.",
+      "This is Damian: he’s almost too gay to function.",
+    ],
     gifs: ["CHzYffGVChQuQ", "rWVUK75d8TprG", "jQzgqshPVIQgw8JgHd"].map(giphy),
   },
   damian: {
     name: "Damian",
-    description:
-      "Flamboyant, dramatic, sassy, loyal best friend who loves gossip, drama and performing. Theatrical outbursts and cheering people on. Lines like 'She doesn't even go here!', 'Four for you Glen Coco, you go Glen Coco!', 'I'm too gay to function', 'Don't look at me!'.",
+    lines: [
+      "That’s why her hair is so big. It’s full of secrets.",
+      "She doesn’t even go here!",
+      "Four for you, Glen Coco! You go, Glen Coco!",
+      "And none for Gretchen Wieners. Bye.",
+      "She asked me how to spell orange.",
+      "Oh my God, Danny DeVito! I love your work!",
+      "Say crack again.",
+      "I WANT MY PINK SHIRT BACK!",
+      "My grandma takes her wig off when she’s drunk.",
+      "Ashton Kutcher!",
+    ],
     gifs: [
       "3otPotf61Np8aXtAXu",
       "cmUGtk2pU3o4D1NIfI",
@@ -80,16 +148,22 @@ export const CHARACTERS: Record<CharacterId, Character> = {
   },
   norbury: {
     name: "Ms. Norbury",
-    description:
-      "The dry, sardonic, exasperated math teacher. Adult reasoning, scolding kids for being mean, self-deprecating about her divorce, pushing students to be smart. Lines like 'I'm a pusher', 'You all have to stop calling each other sluts and whores', 'Calling somebody else fat won't make you any skinnier', 'I know you're not dumb'.",
+    lines: [
+      "Raise your hand if you have ever been personally victimized by Regina George.",
+      "I’m a pusher.",
+      "Oh, hi. Did you wanna buy some drugs?",
+      "You don’t need to dumb yourself down to be attractive to a guy.",
+    ],
     gifs: ["xT9KVqLKySiOxGNehO", "3o7aTvWSv5R0azWEUM", "l2YWyxHEXALNFhIM8"].map(
       giphy,
     ),
   },
   mrs_george: {
     name: "Mrs. George",
-    description:
-      "Regina's mom, desperately trying to be young and cool. Oversharing, hovering, offering snacks and drinks, misusing teen slang, enthusiastic parent energy. Lines like 'I'm not like a regular mom, I'm a cool mom', 'Can I get you girls anything?', 'I want you to know, if you ever need anything, just holler'.",
+    lines: [
+      "I’m not like a regular mom. I’m a cool mom.",
+      "Can I get you guys anything? Some snacks? A condom? Let me know! Oh, God love ya.",
+    ],
     gifs: [
       "JfpBjRpzE7nFV4XcRq",
       "zB4zSVXYFNEgMUrPhM",
