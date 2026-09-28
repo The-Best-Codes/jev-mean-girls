@@ -114,14 +114,33 @@ export function MeanGirlQuiz() {
         </div>
       </div>
 
-      <a
-        href="https://docs.typesafe.ai"
-        target="_blank"
-        rel="noreferrer"
-        className="absolute top-4 right-4 z-50 rounded-full bg-card px-3 py-1 text-sm font-semibold text-foreground shadow-[0_3px_0_var(--foreground)] transition-transform hover:-translate-y-0.5"
-      >
-        classified live by Jev
-      </a>
+      <div className="absolute top-4 right-4 z-50 flex items-center gap-2">
+        <a
+          href="https://github.com/The-Best-Codes/jev-mean-girls"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="View this project on GitHub"
+          className="grid size-7 place-items-center rounded-full bg-card text-foreground shadow-[0_3px_0_var(--foreground)] transition-transform hover:-translate-y-0.5"
+        >
+          <svg
+            aria-hidden="true"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+          >
+            <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.726-4.043-1.61-4.043-1.61-.546-1.387-1.333-1.756-1.333-1.756-1.09-.745.083-.73.083-.73 1.205.085 1.84 1.237 1.84 1.237 1.07 1.834 2.807 1.304 3.492.997.108-.775.418-1.305.762-1.605-2.665-.304-5.467-1.333-5.467-5.93 0-1.31.467-2.38 1.235-3.22-.123-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.3 1.23a11.5 11.5 0 013.003-.404c1.02.005 2.047.138 3.003.404 2.29-1.552 3.297-1.23 3.297-1.23.653 1.652.242 2.873.12 3.176.77.84 1.233 1.91 1.233 3.22 0 4.61-2.807 5.624-5.48 5.922.43.372.823 1.102.823 2.222 0 1.606-.015 2.898-.015 3.293 0 .32.216.694.825.576C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12" />
+          </svg>
+        </a>
+        <a
+          href="https://docs.typesafe.ai"
+          target="_blank"
+          rel="noreferrer"
+          className="rounded-full bg-card px-3 py-1 text-sm font-semibold text-foreground shadow-[0_3px_0_var(--foreground)] transition-transform hover:-translate-y-0.5"
+        >
+          classified live by Jev
+        </a>
+      </div>
     </main>
   );
 }
