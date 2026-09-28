@@ -12,11 +12,13 @@ import {
 
 const CAT_WALL = 0x0001;
 const CAT_GIF = 0x0002;
-const CAT_MAGNET = 0x0004;
 
 const PULL_STRENGTH = 2.4;
-const COLLIDE_WITH_MAGNET_AT = 0.12;
 const SMOOTHING_MS = 260;
+const RESTING_SCALE = 0.65;
+const MAGNETIZED_SCALE = 1.15;
+const COLLISION_SCALE = 0.78;
+const MAGNET_GAP = 40;
 
 const GIFS = CHARACTER_IDS.flatMap((id) =>
   CHARACTERS[id].gifs.map((src, index) => ({ id, src, key: `${id}-${index}` })),
@@ -49,9 +51,11 @@ export function GifPile({ targetsRef, magnetRef }: GifPileProps) {
 
     let width = container.clientWidth;
     let height = container.clientHeight;
-    const size = Math.round(
+    const originalSize = Math.round(
       Math.max(72, Math.min(150, Math.min(width, height) * 0.15)),
     );
+    const size = originalSize * RESTING_SCALE;
+    const collisionSize = size * COLLISION_SCALE;
     container.style.setProperty("--gif-size", `${size}px`);
 
     const wallThickness = 400;
@@ -65,7 +69,7 @@ export function GifPile({ targetsRef, magnetRef }: GifPileProps) {
       walls = [
         Bodies.rectangle(
           width / 2,
-          height + wallThickness / 2,
+          height - (size - collisionSize) / 2 + wallThickness / 2,
           width * 3,
           wallThickness,
           wallOptions,
@@ -89,41 +93,39 @@ export function GifPile({ targetsRef, magnetRef }: GifPileProps) {
     };
     buildWalls();
 
-    let magnet: Matter.Body | null = null;
-    const magnetCenter = { x: width / 2, y: height / 2 };
-    const buildMagnet = () => {
+    let magnetBounds = {
+      left: width / 2,
+      right: width / 2,
+      bottom: height / 2,
+    };
+    const updateMagnetBounds = () => {
       const el = magnetRef.current;
       if (!el) return;
       const box = el.getBoundingClientRect();
       const origin = container.getBoundingClientRect();
-      if (magnet) Composite.remove(world, magnet);
-      magnetCenter.x = box.left - origin.left + box.width / 2;
-      magnetCenter.y = box.top - origin.top + box.height / 2;
-      magnet = Bodies.rectangle(
-        magnetCenter.x,
-        magnetCenter.y,
-        box.width,
-        box.height,
-        {
-          isStatic: true,
-          chamfer: { radius: Math.min(box.height / 2 - 1, 80) },
-          collisionFilter: { category: CAT_MAGNET, mask: CAT_GIF },
-        },
-      );
-      Composite.add(world, magnet);
+      magnetBounds = {
+        left: box.left - origin.left,
+        right: box.right - origin.left,
+        bottom: box.bottom - origin.top,
+      };
     };
-    buildMagnet();
+    updateMagnetBounds();
 
     const dropOrder = GIFS.map((_, i) => i).sort(() => Math.random() - 0.5);
+    const magnetPoints = GIFS.map(() => 0.18 + Math.random() * 0.64);
     const bodies = GIFS.map((_, i) => {
       const slot = dropOrder.indexOf(i);
+      const fallSpace = Math.max(0, height - magnetBounds.bottom - size);
       return Bodies.rectangle(
         size / 2 + Math.random() * Math.max(1, width - size),
-        -size - slot * size * 0.5 - Math.random() * size,
-        size,
-        size,
+        magnetBounds.bottom +
+          size / 2 +
+          8 +
+          (slot / GIFS.length) * fallSpace * 0.45,
+        collisionSize,
+        collisionSize,
         {
-          chamfer: { radius: size * 0.14 },
+          chamfer: { radius: collisionSize * 0.14 },
           restitution: 0.25,
           friction: 0.4,
           frictionAir: 0.015,
@@ -177,7 +179,7 @@ export function GifPile({ targetsRef, magnetRef }: GifPileProps) {
       width = container.clientWidth;
       height = container.clientHeight;
       buildWalls();
-      buildMagnet();
+      updateMagnetBounds();
       for (const body of bodies) {
         const x = Math.min(
           Math.max(body.position.x, size / 2),
@@ -191,6 +193,7 @@ export function GifPile({ targetsRef, magnetRef }: GifPileProps) {
     if (magnetRef.current) resizeObserver.observe(magnetRef.current);
 
     const current: Record<CharacterId, number> = { ...EMPTY_PROBABILITIES };
+    const bodyScales = GIFS.map(() => 1);
     const gravity = engine.gravity.scale * engine.gravity.y;
     let frame = 0;
     let last = performance.now();
@@ -207,9 +210,32 @@ export function GifPile({ targetsRef, magnetRef }: GifPileProps) {
 
       bodies.forEach((body, i) => {
         const p = current[GIFS[i].id];
+        const visualScale = 1 + (MAGNETIZED_SCALE / RESTING_SCALE - 1) * p;
+        if (Math.abs(visualScale - bodyScales[i]) > 0.001) {
+          Body.scale(
+            body,
+            visualScale / bodyScales[i],
+            visualScale / bodyScales[i],
+          );
+          bodyScales[i] = visualScale;
+        }
         if (p > 0.02) {
-          const dx = magnetCenter.x - body.position.x;
-          const dy = magnetCenter.y - body.position.y;
+          const halfSize = (size * visualScale) / 2;
+          const targetX =
+            magnetBounds.left +
+            (magnetBounds.right - magnetBounds.left) * magnetPoints[i];
+          const highestY = magnetBounds.bottom + MAGNET_GAP + halfSize;
+          const dropRange = Math.max(
+            0,
+            Math.min(
+              180,
+              (height - magnetBounds.bottom) * 0.5,
+              height - halfSize - highestY,
+            ),
+          );
+          const targetY = highestY + dropRange * (1 - p);
+          const dx = targetX - body.position.x;
+          const dy = targetY - body.position.y;
           const distance = Math.hypot(dx, dy) || 1;
           const pull = body.mass * gravity * PULL_STRENGTH * p;
           const antiGravity = body.mass * gravity * p;
@@ -217,21 +243,40 @@ export function GifPile({ targetsRef, magnetRef }: GifPileProps) {
             x: (dx / distance) * pull,
             y: (dy / distance) * pull - antiGravity,
           });
+          if (p > 0.05) {
+            const uprightAngle = Math.atan2(
+              Math.sin(body.angle),
+              Math.cos(body.angle),
+            );
+            Body.setAngularVelocity(
+              body,
+              body.angularVelocity * (1 - 0.14 * p) - uprightAngle * 0.018 * p,
+            );
+          }
         }
         body.frictionAir = 0.015 + 0.05 * p;
-        body.collisionFilter.mask =
-          p > COLLIDE_WITH_MAGNET_AT
-            ? CAT_WALL | CAT_GIF | CAT_MAGNET
-            : CAT_WALL | CAT_GIF;
       });
 
       Engine.update(engine, dt);
 
       bodies.forEach((body, i) => {
+        const p = current[GIFS[i].id];
+        if (p > 0.02) {
+          const halfSize = (size * bodyScales[i]) / 2;
+          const rotatedHalfHeight =
+            halfSize *
+            (Math.abs(Math.sin(body.angle)) + Math.abs(Math.cos(body.angle)));
+          const minY = magnetBounds.bottom + MAGNET_GAP + rotatedHalfHeight;
+          if (body.position.y < minY) {
+            Body.setPosition(body, { x: body.position.x, y: minY });
+            if (body.velocity.y < 0) {
+              Body.setVelocity(body, { x: body.velocity.x, y: 0 });
+            }
+          }
+        }
         const el = itemRefs.current[i];
         if (!el) return;
-        const p = current[GIFS[i].id];
-        el.style.transform = `translate3d(${body.position.x - size / 2}px, ${body.position.y - size / 2}px, 0) rotate(${body.angle}rad)`;
+        el.style.transform = `translate3d(${body.position.x - size / 2}px, ${body.position.y - size / 2}px, 0) rotate(${body.angle}rad) scale(${bodyScales[i]})`;
         el.style.zIndex = String(1 + Math.round(p * 20));
         el.style.boxShadow = `0 0 0 ${(p * 10).toFixed(1)}px var(--primary), 0 6px 0 var(--foreground)`;
       });
